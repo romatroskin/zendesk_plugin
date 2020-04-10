@@ -41,6 +41,15 @@ class ZendeskPlugin {
     );
   }
 
+  static Future<void> registerPushProvider({String instanceId}) {
+    return _channel.invokeMethod(
+      'registerPushProvider',
+      {
+        'instanceId': instanceId,
+      },
+    );
+  }
+
   static Future<void> showMessagingActivity({bool withAnswerBotEngine = false, bool withSupportEngine = false}) {
     return _channel.invokeMethod(
       'showMessagingActivity',
