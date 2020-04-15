@@ -6,6 +6,8 @@ import android.content.ContextWrapper
 import android.util.Log
 import androidx.annotation.NonNull
 import com.zendesk.logger.Logger
+import com.zendesk.service.ErrorResponse
+import com.zendesk.service.ZendeskCallback
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -28,14 +30,12 @@ import zendesk.support.guide.ViewArticleActivity
 import zendesk.support.request.RequestActivity
 import zendesk.support.requestlist.RequestListActivity
 
-
 /** ZendeskPlugin */
 public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
     private val TAG = "ZendeskPlugin"
 
     override fun onAttachedToEngine(@NonNull flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         val channel = MethodChannel(flutterPluginBinding.binaryMessenger, "zendesk_plugin")
-//    this.applicationContext = flutterPluginBinding.applicationContext
         channel.setMethodCallHandler(this);
     }
 
@@ -58,10 +58,7 @@ public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
         }
     }
 
-    private var activity: Activity? = null
-//    private var zendeskUrl: String? = null
-//    private var appId: String? = null
-//    private var clientId: String? = null
+    public var activity: Activity? = null
 
     override fun onDetachedFromActivity() {
         activity = null
@@ -69,20 +66,10 @@ public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         activity = binding.activity
-//        if(zendeskUrl != null && appId != null) {
-//            Zendesk.INSTANCE.init(activity!!, zendeskUrl!!, appId!!, clientId)
-//            Support.INSTANCE.init(Zendesk.INSTANCE);
-//            AnswerBot.INSTANCE.init(Zendesk.INSTANCE, Support.INSTANCE);
-//        }
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
-//        if(zendeskUrl != null && appId != null) {
-//            Zendesk.INSTANCE.init(activity!!, zendeskUrl!!, appId!!, clientId)
-//            Support.INSTANCE.init(Zendesk.INSTANCE);
-//            AnswerBot.INSTANCE.init(Zendesk.INSTANCE, Support.INSTANCE);
-//        }
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
@@ -104,6 +91,10 @@ public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
             }
             "setJWTIdentity" -> {
                 setJWTIdentity(call.argument<String>("jwtIdentifier"))
+                result.success(null)
+            }
+            "registerPushProvider" -> {
+                registerPushProvider(call.argument<String>("instanceId"));
                 result.success(null)
             }
             "showMessagingActivity" -> {
@@ -135,25 +126,36 @@ public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
     private fun init(@NonNull zendeskUrl: String?, @NonNull appId: String?, @NonNull clientId: String?) {
         Logger.setLoggable(true)
         if (zendeskUrl != null && appId != null) {
-//      this.zendeskUrl = zendeskUrl
-//      this.appId = appId
-//      this.clientId = clientId
             Zendesk.INSTANCE.init(activity!!, zendeskUrl, appId, clientId)
+            Support.INSTANCE.init(Zendesk.INSTANCE);
+            AnswerBot.INSTANCE.init(Zendesk.INSTANCE, Support.INSTANCE)
         }
     }
 
     private fun setAnonymousIdentity(@NonNull name: String?, @NonNull email: String?) {
         val identity = AnonymousIdentity.Builder().withNameIdentifier(name).withEmailIdentifier(email).build();
         Zendesk.INSTANCE.setIdentity(identity)
-        Support.INSTANCE.init(Zendesk.INSTANCE);
-        AnswerBot.INSTANCE.init(Zendesk.INSTANCE, Support.INSTANCE);
+
     }
 
     private fun setJWTIdentity(jwdIdentifier: String?) {
         val identity = JwtIdentity(jwdIdentifier)
         Zendesk.INSTANCE.setIdentity(identity)
-        Support.INSTANCE.init(Zendesk.INSTANCE);
-        AnswerBot.INSTANCE.init(Zendesk.INSTANCE, Support.INSTANCE);
+    }
+
+    private fun registerPushProvider(instanceId: String?) {
+        instanceId?.let {
+            Zendesk.INSTANCE.provider()?.pushRegistrationProvider()?.registerWithDeviceIdentifier(
+                    it, object: ZendeskCallback<String>() {
+                override fun onSuccess(p0: String?) {
+                    Log.d("ZENDESK", "Push Provider Registered Successfully")
+                }
+
+                override fun onError(p0: ErrorResponse?) {
+                    Log.d("ZENDESK", p0.toString())
+                }
+            })
+        };
     }
 
     private fun showMessagingActivity(@NonNull withAnswerBotEngine: Boolean?, @NonNull withSupportEngine: Boolean?) {
@@ -195,5 +197,14 @@ public class ZendeskPlugin() : FlutterPlugin, MethodCallHandler, ActivityAware {
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
+        Zendesk.INSTANCE.provider()?.pushRegistrationProvider()?.unregisterDevice(object: ZendeskCallback<Void>(){
+            override fun onSuccess(p0: Void?) {
+                Log.d("ZENDESK", "Push Provider Unregistered Successfully")
+            }
+
+            override fun onError(p0: ErrorResponse?) {
+                Log.d("ZENDESK", p0.toString())
+            }
+        })
     }
 }
